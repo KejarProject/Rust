@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poké Drive – Tangkap Pokémon</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;background:#10151f;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;touch-action:none}
+#wrap{position:relative;width:100%;height:100%}
+canvas#c{display:block;width:100%;height:100%}
+#hud{position:absolute;left:10px;top:10px;background:#000a;padding:8px 12px;border-radius:10px;font-size:14px;line-height:1.5}
+#mm{position:absolute;right:10px;top:10px;border:2px solid #fff6;border-radius:8px;background:#1b2230}
+#ctl{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:space-between;padding:0 14px;pointer-events:none}
+#ctl div{display:flex;gap:10px;pointer-events:auto}
+#ctl button{width:78px;height:78px;border-radius:50%;border:2px solid #fff6;background:#0008;color:#fff;font-size:24px;touch-action:none}
+#ov{position:absolute;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;padding:16px}
+#card{background:#1c2434;border:2px solid #ffcb05;border-radius:16px;padding:22px;max-width:460px;width:100%;max-height:92%;overflow:auto;text-align:center}
+h2{margin:0 0 8px;color:#ffcb05}
+.s{color:#aab;font-size:13px;margin:0 0 10px}
+.q{font-size:17px;margin:12px 0;font-weight:600}
+button.opt,button.go{display:block;width:100%;margin:8px 0;padding:12px;border-radius:10px;border:2px solid #4a5675;background:#26304a;color:#fff;font-size:16px;cursor:pointer}
+button.go{background:#ffcb05;color:#222;border-color:#ffcb05;font-weight:700}
+button.opt.ok{background:#1f7a3a;border-color:#4cd47a}
+button.opt.no{background:#8a2a2a;border-color:#ff6b6b}
+input{width:100%;padding:12px;border-radius:10px;border:2px solid #4a5675;background:#10151f;color:#fff;font-size:16px;margin:8px 0;box-sizing:border-box}
+.res{font-weight:700;margin:10px 0}
+.big{font-size:44px;font-weight:800;color:#ffcb05}
+</style></head>
+<body>
+<div id="wrap">
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<canvas id="mm" width="120" height="90"></canvas>
+<button id="au" style="position:absolute;right:10px;top:112px;padding:6px 10px;border-radius:8px;border:2px solid #fff6;background:#000a;color:#fff;font-size:12px"></button>
+<div id="ctl"><div><button id="bl">◀</button><button id="br">▶</button></div><div><button id="bb">▼</button><button id="bg">▲</button></div></div>
+<div id="ov"><div id="card"></div></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$("c"),ctx=cv.getContext("2d"),mm=$("mm"),mx=mm.getContext("2d");
+const W=2490,H=1890,G=300,R=90;
+const SP=[["Pikachu","#f7d02c","⚡"],["Charmander","#f08030","🔥"],["Squirtle","#6890f0","💧"],["Bulbasaur","#78c850","🌿"],["Eevee","#b08a5a","⭐"],["Jigglypuff","#f4a6c8","🎵"],["Meowth","#e8d9a0","💰"],["Psyduck","#f8d030","❓"],["Snorlax","#4a6a7a","💤"],["Togepi","#f5f0e0","🥚"]];
+// [pertanyaan, jawaban benar, salah1, salah2, salah3]
+const Q=[
+["Tipe data dari nilai 42 adalah…","int","float","string","boolean"],
+["Variabel jumlah_pokemon = 10 bertipe…","int","float","string","boolean"],
+["Tipe data dari nilai 3.14 adalah…","float","int","string","boolean"],
+["Manakah nilai yang bertipe float?","2.5","25","“2.5”","True"],
+["Tipe data dari nilai “Pikachu” adalah…","string","int","float","boolean"],
+["Manakah nilai yang bertipe string?","“100”","100","100.0","True"],
+["Tipe data yang hanya bernilai True atau False adalah…","boolean","string","int","float"],
+["Hasil dari 5 > 3 bertipe dan bernilai…","boolean, True","int, 2","string, “True”","float, 2.0"],
+["Kegunaan operator modulo (%) adalah…","Mencari sisa hasil bagi","Mencari hasil bagi","Menghitung persentase","Mengalikan dua bilangan"],
+["Hasil dari 10 % 3 adalah…","1","3","0","3.33"],
+["Bilangan n dikatakan genap jika kondisi berikut bernilai True…","n % 2 == 0","n % 2 == 1","n / 2 == 0","n * 2 == 0"],
+["Output dari print(2 + 3) adalah…","5","23","2 + 3","error"],
+["Output dari print(“a”, “b”) adalah…","a b","ab","“a”, “b”","a,b"],
+["Fungsi print() digunakan untuk…","Menampilkan output ke layar","Membaca input dari pengguna","Menyimpan data ke file","Menghapus variabel"],
+["Output dari print(“Halo”) adalah…","Halo","“Halo”","print Halo","print(“Halo”)"],
+["Kata kunci if digunakan untuk…","Mengambil keputusan berdasarkan kondisi","Mengulang kode berkali-kali","Membuat fungsi baru","Menampilkan teks ke layar"]];
+let car,pk,caught,enc,run=false,name="",qs,keys={},last=0,auto=matchMedia("(pointer:coarse)").matches;
+const isRoad=(x,y)=>x>=0&&y>=0&&x<=W&&y<=H&&(x%G<R||y%G<R);
+const free=(x,y)=>{const r=8;return isRoad(x-r,y-r)&&isRoad(x+r,y-r)&&isRoad(x-r,y+r)&&isRoad(x+r,y+r)};
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+function reset(){
+ relT=10;car={x:45,y:45,a:0,v:0};caught=[];enc=0;qs=shuffle(Q.slice());pk=[];
+ SP.forEach(s=>{let p,t=0;do{const v=Math.random()<.5;
+  p=v?{x:(Math.random()*9|0)*G+45,y:60+Math.random()*(H-120)}:{x:60+Math.random()*(W-120),y:(Math.random()*7|0)*G+45};t++}
+  while(t<200&&(Math.hypot(p.x-45,p.y-45)<300||pk.some(o=>Math.hypot(o.x-p.x,o.y-p.y)<250)));
+  pk.push({...p,n:s[0],c:s[1],e:s[2],ph:Math.random()*6,done:false})});
+}
+function randPos(){const v=Math.random()<.5;return v?{x:(Math.random()*9|0)*G+45,y:60+Math.random()*(H-120)}:{x:60+Math.random()*(W-120),y:(Math.random()*7|0)*G+45}}
+function relocate(){pk.forEach(p=>{if(p.done)return;let q,t=0;do{q=randPos();t++}while(t<100&&(Math.hypot(q.x-car.x,q.y-car.y)<250||pk.some(o=>o!==p&&!o.done&&Math.hypot(o.x-q.x,o.y-q.y)<200)));p.x=q.x;p.y=q.y})}
+function ui(h){$("card").innerHTML=h;$("ov").style.display="flex"}
+function hide(){$("ov").style.display="none"}
+function start(){
+ ui(`<h2>🚗 Poké Drive</h2><p class="s">Jelajahi kota dan tangkap 10 Pokémon berbeda. Tiap bertemu Pokémon, jawab kuis tipe data — benar = tertangkap, salah = kabur. Hanya satu kesempatan!</p>
+ <p class="s">Kontrol: panah / WASD, atau tombol layar.</p>
+ <input id="nm" maxlength="20" placeholder="Masukkan namamu">
+ <button class="go" id="st">Mulai Berburu!</button>`);
+ const go=()=>{name=$("nm").value.trim()||"Trainer";reset();hide();run=true;hud()};
+ $("st").onclick=go;$("nm").onkeydown=e=>{if(e.key==="Enter")go()};
+}
+function hud(){$("hud").innerHTML=`👤 ${name}<br>🎯 Tertangkap: <b>${caught.length}</b><br>🔎 Ditemui: ${enc}/10<br>🔄 Pindah dalam: <b id="tm">${Math.ceil(relT)}</b>s`}
+function quiz(p){
+ run=false;keys={};
+ const q=qs[enc],opts=shuffle(q.slice(1).map((t,i)=>({t,ok:i===0})));
+ ui(`<h2>${p.e} ${p.n} liar muncul!</h2><p class="s">Satu kesempatan saja. Jawab dengan benar!</p><p class="q">${q[0]}</p><div id="o"></div><div id="r"></div>`);
+ const bs=[];
+ opts.forEach(op=>{const b=document.createElement("button");b.className="opt";b.textContent=op.t;
+  b.onclick=()=>{
+   bs.forEach((x,i)=>{x.disabled=true;if(opts[i].ok)x.classList.add("ok")});
+   if(!op.ok)b.classList.add("no");
+   p.done=true;enc++;
+   if(op.ok)caught.push(p.n);
+   $("r").innerHTML=`<p class="res">${op.ok?`✅ Berhasil! ${p.n} tertangkap!`:`❌ Salah! ${p.n} terlepas…`}</p><button class="go" id="nx">${enc>=10?"Lihat Hasil":"Lanjut Menjelajah"}</button>`;
+   $("nx").onclick=()=>{hud();if(enc>=10)finish();else{hide();run=true}};
+  };bs.push(b);$("o").append(b)});
+}
+function finish(){
+ ui(`<h2>🏆 Perburuan Selesai!</h2><p>Selamat, <b>${name}</b>!</p>
+ <div class="big">${caught.length}/10</div><p>Pokémon berhasil kamu tangkap</p>
+ <p class="s">${caught.length?caught.join(", "):"Belum ada yang tertangkap. Belajar lagi, ya!"}</p>
+ <button class="go" id="again">Main Lagi</button>`);
+ $("again").onclick=start;
+}
+// kontrol
+const km={ArrowUp:"u",w:"u",W:"u",ArrowDown:"d"," ":"d",s:"d",S:"d",ArrowLeft:"l",a:"l",A:"l",ArrowRight:"r",d:"r",D:"r"};
+addEventListener("keydown",e=>{if(km[e.key]){keys[km[e.key]]=1;e.preventDefault()}});
+addEventListener("keyup",e=>{if(km[e.key])keys[km[e.key]]=0});
+[["bl","l"],["br","r"],["bg","u"],["bb","d"]].forEach(([id,k])=>{const b=$(id);
+ b.onpointerdown=e=>{keys[k]=1;e.preventDefault()};
+ ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>keys[k]=0))});
+const au=$("au");const upAu=()=>au.textContent="⚙️ Auto-gas: "+(auto?"ON":"OFF");au.onclick=()=>{auto=!auto;upAu()};upAu();
+function resize(){cv.width=cv.clientWidth;cv.height=cv.clientHeight}
+addEventListener("resize",resize);
+let relT=10;
+function update(dt){relT-=dt;if(relT<=0){relocate();relT=10}const tm=$("tm");if(tm)tm.textContent=Math.ceil(relT);
+ if(keys.u||auto)car.v+=420*dt;if(keys.d)car.v-=(car.v>0?800:300)*dt;
+ car.v-=car.v*(keys.u||auto?.5:1.8)*dt;car.v=Math.max(-90,Math.min(230,car.v));
+ const t=(keys.r?1:0)-(keys.l?1:0);car.a+=t*3.4*dt*Math.max(-1,Math.min(1,car.v/50));
+ const nx=car.x+Math.cos(car.a)*car.v*dt,ny=car.y+Math.sin(car.a)*car.v*dt;
+ if(free(nx,ny)){car.x=nx;car.y=ny}else if(free(nx,car.y)){car.x=nx;car.v*=.92}else if(free(car.x,ny)){car.y=ny;car.v*=.92}else car.v*=.3;
+ for(const p of pk)if(!p.done&&Math.hypot(p.x-car.x,p.y-car.y)<38){quiz(p);break}
+}
+function draw(ts){
+ const w=cv.width,h=cv.height,cx=Math.max(0,Math.min(W-w,car.x-w/2)),cy=Math.max(0,Math.min(H-h,car.y-h/2));
+ ctx.fillStyle="#5d6b82";ctx.fillRect(0,0,w,h);
+ ctx.save();ctx.translate(-(W<w?(W-w)/2:cx),-(H<h?(H-h)/2:cy));
+ ctx.fillStyle="#6b7a8f";ctx.fillRect(0,0,W,H);
+ for(let i=0;i<8;i++)for(let j=0;j<6;j++){const x=i*G+R,y=j*G+R;
+  ctx.fillStyle=`hsl(${(i*53+j*97)%360} 25% 42%)`;ctx.fillRect(x+14,y+14,182,182);
+  ctx.fillStyle=`hsl(${(i*53+j*97)%360} 30% 56%)`;ctx.fillRect(x+34,y+34,142,142);}
+ ctx.fillStyle="#3b414d";
+ for(let k=0;k<9;k++)ctx.fillRect(k*G,0,R,H);
+ for(let k=0;k<7;k++)ctx.fillRect(0,k*G,W,R);
+ ctx.strokeStyle="#e8e2a0";ctx.lineWidth=3;ctx.setLineDash([18,16]);
+ for(let k=0;k<9;k++){ctx.beginPath();ctx.moveTo(k*G+45,0);ctx.lineTo(k*G+45,H);ctx.stroke()}
+ for(let k=0;k<7;k++){ctx.beginPath();ctx.moveTo(0,k*G+45);ctx.lineTo(W,k*G+45);ctx.stroke()}
+ ctx.setLineDash([]);
+ ctx.textAlign="center";ctx.textBaseline="middle";
+ for(const p of pk){if(p.done)continue;const b=Math.sin(ts/300+p.ph)*4;
+  ctx.fillStyle="#0004";ctx.beginPath();ctx.ellipse(p.x,p.y+18,18,6,0,0,7);ctx.fill();
+  ctx.fillStyle=p.c;ctx.strokeStyle="#fff";ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y+b,20,0,7);ctx.fill();ctx.stroke();
+  ctx.font="20px sans-serif";ctx.fillText(p.e,p.x,p.y+b+1);
+  ctx.font="bold 12px sans-serif";ctx.fillStyle="#fff";ctx.strokeStyle="#000";ctx.lineWidth=3;ctx.strokeText(p.n,p.x,p.y-32+b);ctx.fillText(p.n,p.x,p.y-32+b)}
+ ctx.save();ctx.translate(car.x,car.y);ctx.rotate(car.a);
+ ctx.fillStyle="#e53935";ctx.fillRect(-16,-9,32,18);ctx.fillStyle="#9fd3ff";ctx.fillRect(2,-7,9,14);
+ ctx.fillStyle="#ffeb3b";ctx.fillRect(14,-8,3,4);ctx.fillRect(14,4,3,4);ctx.restore();
+ ctx.restore();
+ mx.fillStyle="#1b2230";mx.fillRect(0,0,120,90);const s=120/W;
+ for(const p of pk)if(!p.done){mx.fillStyle=p.c;mx.beginPath();mx.arc(p.x*s,p.y*s,3,0,7);mx.fill()}
+ mx.fillStyle="#f33";mx.fillRect(car.x*s-2,car.y*s-2,5,5);
+}
+function loop(ts){const dt=Math.min(.05,(ts-last)/1000||0);last=ts;
+ if(car){if(run)update(dt);draw(ts)}requestAnimationFrame(loop)}
+resize();reset();start();requestAnimationFrame(loop);
+</script></body></html>
